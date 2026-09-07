@@ -62,4 +62,8 @@
         android:title="@string/action_delete"
         android:icon="@drawable/ic_delete_white_24dp"
         app:showAsAction="ifRoom" />
+    <item
+        android:id="@+id/action_import_m3u"
+        android:title="Import M3U"
+        android:showAsAction="never" />
 </menu>
