@@ -79,6 +79,9 @@ import java.util.Date;
 import okhttp3.OkHttpClient;
 
 import static net.programmierecke.radiodroid2.service.MediaSessionCallback.EXTRA_STATION_UUID;
+import android.content.Intent;
+import android.net.Uri;
+import android.widget.Toast;
 
 public class ActivityMain extends AppCompatActivity implements SearchView.OnQueryTextListener,
         NavigationView.OnNavigationItemSelectedListener,
@@ -731,6 +734,19 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                 }
             }
         }
+        if (requestCode == 9981 && resultCode == RESULT_OK && resultData != null) {
+            Uri uri = resultData.getData();
+            if (uri != null) {
+                Toast.makeText(this, "Importing M3U...", Toast.LENGTH_SHORT).show();
+                new Thread(() -> {
+                    int count = M3uImporter.importM3u(this, uri);
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "Imported " + count + " stations to Favorites", Toast.LENGTH_LONG).show();
+                        recreate();
+                    });
+                }).start();
+            }
+        }
     }
 
     @Override
@@ -814,6 +830,12 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                     Log.e("MAIN", e.toString());
                 }
                 return true;
+            case R.id.action_import_m3u:
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("*/*");
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                startActivityForResult(Intent.createChooser(intent, "Select M3U File"), 9981);
+                return true;           
             case R.id.action_set_sleep_timer:
                 changeTimer();
                 return true;
