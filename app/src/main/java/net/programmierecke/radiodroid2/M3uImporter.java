@@ -2,9 +2,7 @@ package net.programmierecke.radiodroid2;
 
 import android.content.Context;
 import android.net.Uri;
-import net.programmierecke.radiodroid2.data.AppDatabase;
-import net.programmierecke.radiodroid2.data.DataStation;
-import net.programmierecke.radiodroid2.data.StarredStation;
+import net.programmierecke.radiodroid2.station.DataRadioStation;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -23,7 +21,8 @@ public class M3uImporter {
             String line;
             String currentTitle = "Unknown Station";
 
-            AppDatabase db = AppDatabase.getInstance(context);
+            RadioDroidApp app = (RadioDroidApp) context.getApplicationContext();
+            FavouriteManager favouriteManager = app.getFavouriteManager();
 
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -37,15 +36,12 @@ public class M3uImporter {
                 } else if (!line.startsWith("#")) {
                     String streamUrl = line;
 
-                    DataStation station = new DataStation();
-                    station.StationUUID = UUID.randomUUID().toString();
+                    DataRadioStation station = new DataRadioStation();
+                    station.StationUuid = UUID.randomUUID().toString();
                     station.Name = currentTitle;
-                    station.Url = streamUrl;
-                    station.Bitrate = 0;
+                    station.StreamUrl = streamUrl;
 
-                    StarredStation starred = new StarredStation(station);
-                    db.starredStationDAO().insert(starred);
-
+                    favouriteManager.add(station);
                     count++;
                     currentTitle = "Unknown Station";
                 }
