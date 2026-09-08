@@ -22,11 +22,11 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Free Release APK
-        run: ./gradlew assembleFreeRelease --stacktrace
+      - name: Build Free Debug APK
+        run: ./gradlew assembleFreeDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RadioDroid-M3U-Release
-          path: app/build/outputs/apk/free/release/*.apk
+          name: RadioDroid-M3U-Signed
+          path: app/build/outputs/apk/free/debug/*.apk
