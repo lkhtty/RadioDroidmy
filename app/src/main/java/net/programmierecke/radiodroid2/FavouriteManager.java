@@ -88,5 +88,24 @@ public class FavouriteManager extends StationSaveManager {
             }
         }
     }
+    /**
+     * 清理指定在线槽位的旧电台（例如覆盖源1时只删[源1]，绝对不触动本地导入的 M3U）
+     */
+    public void removeOnlineSlot(int slotIndex) {
+        String uuidPrefix = "online_" + slotIndex + "_";
+        String namePrefix = "[源" + (slotIndex + 1) + "] ";
+        if (listStations != null) {
+            for (int i = listStations.size() - 1; i >= 0; i--) {
+                DataRadioStation station = listStations.get(i);
+                if (station != null) {
+                    if ((station.StationUuid != null && station.StationUuid.startsWith(uuidPrefix))
+                            || (station.Name != null && station.Name.startsWith(namePrefix))) {
+                        listStations.remove(i);
+                    }
+                }
+            }
+            Save();
+        }
+    }
 }
 
