@@ -835,7 +835,10 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                 intent.setType("*/*");
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
                 startActivityForResult(Intent.createChooser(intent, "Select M3U File"), 9981);
-                return true;           
+                return true;  
+            case R.id.action_import_online_m3u:
+                showImportOnlineM3uDialog();
+                return true;            
             case R.id.action_set_sleep_timer:
                 changeTimer();
                 return true;
@@ -1192,4 +1195,43 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
     public void invalidateOptionsMenuForCast() {
         invalidateOptionsMenu();
     }
+    private void showImportOnlineM3uDialog() {
+        final android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("http:// 或 https:// 开头的链接");
+        input.setSingleLine(true);
+
+        new AlertDialog.Builder(this)
+                .setTitle("导入在线 M3U")
+                .setMessage("最多保留 3 个在线源，第 4 个自动覆盖第 1 个，不影响本地导入的电台。")
+                .setView(input)
+                .setPositiveButton("开始导入", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        String url = input.getText().toString().trim();
+                        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                            Toast.makeText(ActivityMain.this, "请输入以 http/https 开头的有效链接", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
+                        Toast.makeText(ActivityMain.this, "正在下载并导入，请稍候...", Toast.LENGTH_SHORT).show();
+
+                        M3uImporter.importOnlineM3u(ActivityMain.this, url, new M3uImporter.OnOnlineImportListener() {
+                            @Override
+                            public void onSuccess(int slotNumber, int count) {
+                                Toast.makeText(ActivityMain.this,
+                                        "导入成功：已更新 [源" + slotNumber + "]，共 " + count + " 个电台",
+                                        Toast.LENGTH_LONG).show();
+                                recreate();
+                            }
+
+                            @Override
+                            public void onError(String message) {
+                                Toast.makeText(ActivityMain.this, message, Toast.LENGTH_LONG).show();
+                            }
+                        });
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }    
 }
