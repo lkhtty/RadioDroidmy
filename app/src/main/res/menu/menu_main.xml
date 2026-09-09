@@ -66,4 +66,8 @@
         android:id="@+id/action_import_m3u"
         android:title="Import M3U"
         android:showAsAction="never" />
+    <item
+        android:id="@+id/action_import_online_m3u"
+        android:title="导入在线 M3U"
+        android:showAsAction="never" />
 </menu>
