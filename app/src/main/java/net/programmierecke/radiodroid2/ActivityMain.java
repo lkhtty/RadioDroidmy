@@ -341,7 +341,7 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
 
         switch (selectedMenuItem) {
             case R.id.nav_item_stations:
-                f = new FragmentTabs();
+                f = new FragmentStarred();
                 break;
             case R.id.nav_item_starred:
                 f = new FragmentStarred();
@@ -929,33 +929,9 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
             return;
         }
 
-        RadioDroidApp radioDroidApp = (RadioDroidApp) getApplication();
-        HistoryManager hm = radioDroidApp.getHistoryManager();
-        FavouriteManager fm = radioDroidApp.getFavouriteManager();
-
-        final String startupAction = sharedPref.getString("startup_action", getResources().getString(R.string.startup_show_history));
-
-        if (startupAction.equals(getResources().getString(R.string.startup_show_history)) && hm.isEmpty()) {
-            selectMenuItem(R.id.nav_item_stations);
-            return;
-        }
-
-        if (startupAction.equals(getResources().getString(R.string.startup_show_favorites)) && fm.isEmpty()) {
-            selectMenuItem(R.id.nav_item_stations);
-            return;
-        }
-
-        if (startupAction.equals(getResources().getString(R.string.startup_show_history))) {
-            selectMenuItem(R.id.nav_item_history);
-        } else if (startupAction.equals(getResources().getString(R.string.startup_show_favorites))) {
-            selectMenuItem(R.id.nav_item_starred);
-        } else if (startupAction.equals(getResources().getString(R.string.startup_show_all_stations)) || selectedMenuItem < 0) {
-            selectMenuItem(R.id.nav_item_stations);
-        } else {
-            selectMenuItem(selectedMenuItem);
-        }
+        // 开机 100% 直奔收藏夹，绝不去打开海外电台大厅
+        selectMenuItem(R.id.nav_item_starred);
     }
-
     private void selectMenuItem(int itemId) {
         MenuItem item;
         if (Utils.bottomNavigationEnabled(this))
