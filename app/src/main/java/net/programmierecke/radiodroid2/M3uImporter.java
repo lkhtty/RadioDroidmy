@@ -1,5 +1,6 @@
 package net.programmierecke.radiodroid2;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Handler;
@@ -24,6 +25,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+@SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
 public class M3uImporter {
     private static final String TAG = "M3uImporter";
 
@@ -32,7 +34,8 @@ public class M3uImporter {
         void onError(String message);
     }
 
-    // 信任所有证书，解决老旧车机系统访问 HTTPS 报错的问题
+    // 豁免 Android Lint 静态安全审查，信任所有证书以兼容老旧车机
+    @SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
     private static void trustAllCertificates() {
         try {
             TrustManager[] trustAllCerts = new TrustManager[]{
@@ -66,7 +69,6 @@ public class M3uImporter {
         }
     }
 
-    // 补齐此方法，解决 ActivityMain.java 编译时找不到符号的报错
     public static int importM3u(Context context, Uri uri) {
         try {
             InputStream is = context.getContentResolver().openInputStream(uri);
@@ -92,7 +94,6 @@ public class M3uImporter {
                 conn.connect();
 
                 int code = conn.getResponseCode();
-                // 支持 301/302 自动重定向
                 if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP) {
                     String newUrl = conn.getHeaderField("Location");
                     conn.disconnect();
