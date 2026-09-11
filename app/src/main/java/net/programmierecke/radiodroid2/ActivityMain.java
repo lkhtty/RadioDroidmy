@@ -831,11 +831,12 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                 }
                 return true;
             case R.id.action_import_m3u:
-                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                intent.setType("*/*");
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                startActivityForResult(Intent.createChooser(intent, "Select M3U File"), 9981);
-                return true;  
+             try {
+                 LoadFavourites(); // 直接调用软件内置自带的文件弹窗，车机绝不闪退
+             } catch (Exception e) {
+                 Log.e("MAIN", "Load error: " + e);
+             }
+             return true;
             case R.id.action_import_online_m3u:
                 showImportOnlineM3uDialog();
                 return true;            
