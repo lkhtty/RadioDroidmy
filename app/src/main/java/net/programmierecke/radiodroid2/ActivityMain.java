@@ -1198,7 +1198,7 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                                 Toast.makeText(ActivityMain.this,
                                         "导入成功：已更新 [源" + slotNumber + "]，共 " + count + " 个电台",
                                         Toast.LENGTH_LONG).show();
-                                recreate();
+                                mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
                             }
 
                             @Override
@@ -1210,5 +1210,5 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                 })
                 .setNegativeButton("取消", null)
                 .show();
-    }    
+    }
 }
