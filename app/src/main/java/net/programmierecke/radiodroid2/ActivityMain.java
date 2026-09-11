@@ -765,6 +765,7 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                 }
             } else if (dialog instanceof OpenFileDialog) {
                 favouriteManager.LoadM3U(file.getParent(), file.getName());
+                mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
             }
         } catch (Exception e) {
             Log.e("MAIN", e.toString());
@@ -830,13 +831,16 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                     Log.e("MAIN", e.toString());
                 }
                 return true;
-            case R.id.action_import_m3u:
-             try {
-                 LoadFavourites(); // 直接调用软件内置自带的文件弹窗，车机绝不闪退
-             } catch (Exception e) {
-                 Log.e("MAIN", "Load error: " + e);
-             }
-             return true;
+           case R.id.action_import_m3u:
+                try {
+                    // 先检查车机存储读写权限，有权限直接弹窗，没权限自动申请权限
+                    if (Utils.verifyStoragePermissions(this, PERM_REQ_STORAGE_FAV_LOAD)) {
+                        LoadFavourites();
+                    }
+                } catch (Exception e) {
+                    Log.e("MAIN", "Load error: " + e);
+                }
+                return true;
             case R.id.action_import_online_m3u:
                 showImportOnlineM3uDialog();
                 return true;            
