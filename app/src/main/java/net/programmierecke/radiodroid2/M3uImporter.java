@@ -66,6 +66,18 @@ public class M3uImporter {
         }
     }
 
+    // 补齐此方法，解决 ActivityMain.java 编译时找不到符号的报错
+    public static int importM3u(Context context, Uri uri) {
+        try {
+            InputStream is = context.getContentResolver().openInputStream(uri);
+            if (is == null) return 0;
+            return importLocalFileStream(context, is);
+        } catch (Exception e) {
+            Log.e(TAG, "importM3u error", e);
+            return 0;
+        }
+    }
+
     public static void importOnlineM3u(Context context, String urlString, OnOnlineImportListener listener) {
         new Thread(() -> {
             HttpURLConnection conn = null;
@@ -142,7 +154,7 @@ public class M3uImporter {
         String currentTitle = "电台频道";
         while ((line = reader.readLine()) != null) {
             line = line.trim();
-            if (line.startsWith("\uFEFF")) { // 剔除 Windows BOM 头
+            if (line.startsWith("\uFEFF")) {
                 line = line.substring(1).trim();
             }
             if (line.isEmpty()) continue;
