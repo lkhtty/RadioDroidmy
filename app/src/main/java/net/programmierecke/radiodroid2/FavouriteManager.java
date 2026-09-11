@@ -90,18 +90,18 @@ public class FavouriteManager extends StationSaveManager {
     }
 
     /**
-     * 获取下一个在线槽位索引（固定返回槽位 0，即对应 [源1]）
+     * 获取下一个在线槽位索引（固定返回 1，即对应源1）
      */
     public int getNextOnlineSlot() {
-        return 0;
+        return 1;
     }
 
     /**
-     * 清理指定在线槽位的旧电台（例如覆盖源1时只删[源1]，绝对不触动本地导入的 M3U）
+     * 清理指定在线槽位的旧电台（例如覆盖源1时只删[源1]，绝对不触动源2、源3和本地收藏）
      */
     public void removeOnlineSlot(int slotIndex) {
         String uuidPrefix = "online_" + slotIndex + "_";
-        String namePrefix = "[源" + (slotIndex + 1) + "]"; // 兼容带空格与不带空格的 [源1]
+        String namePrefix = "[源" + slotIndex + "]"; // 与 M3uImporter 第123行 [源1] 保持100%一致
         if (listStations != null) {
             for (int i = listStations.size() - 1; i >= 0; i--) {
                 DataRadioStation station = listStations.get(i);
