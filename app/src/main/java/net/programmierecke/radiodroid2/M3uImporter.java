@@ -2,10 +2,13 @@ package net.programmierecke.radiodroid2;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import net.programmierecke.radiodroid2.station.DataRadioStation;
 
@@ -14,7 +17,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +36,7 @@ public class M3uImporter {
         void onError(String message);
     }
 
-    // 豁免 Android Lint 静态安全审查，信任所有证书以兼容老旧车机
+    // 豁免 Android Lint 静态安全审查，信任所有证书以兼容老旧车机 Android 5
     @SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
     private static void trustAllCertificates() {
         try {
@@ -52,16 +54,32 @@ public class M3uImporter {
         } catch (Exception ignored) {}
     }
 
+    /**
+     * 本地文件流导入
+     */
     public static int importLocalFileStream(Context context, InputStream is) {
         try {
             if (is == null) return 0;
             BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
-            List<DataRadioStation> stations = parseM3uStream(reader, null);
+
             RadioDroidApp app = (RadioDroidApp) context.getApplicationContext();
             FavouriteManager fm = app.getFavouriteManager();
+
+            int slotNumber = fm.getNextOnlineSlot();
+            fm.removeOnlineSlot(slotNumber);
+
+            String prefix = "[源" + slotNumber + "]";
+            List<DataRadioStation> stations = parseM3uStream(reader, prefix, slotNumber);
+
             for (DataRadioStation st : stations) {
                 fm.add(st);
             }
+            fm.Save(); // 强制写入 SharedPreferences 持久化落盘
+
+            // 发送全局广播，通知收藏夹列表立即刷新显示
+            Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
+            LocalBroadcastManager.getInstance(context).sendBroadcast(local);
+
             return stations.size();
         } catch (Exception e) {
             Log.e(TAG, "importLocalFileStream error", e);
@@ -69,6 +87,9 @@ public class M3uImporter {
         }
     }
 
+    /**
+     * 通过 Uri 导入本地文件
+     */
     public static int importM3u(Context context, Uri uri) {
         try {
             InputStream is = context.getContentResolver().openInputStream(uri);
@@ -80,34 +101,23 @@ public class M3uImporter {
         }
     }
 
+    /**
+     * 在线网络 URL 导入
+     */
     public static void importOnlineM3u(Context context, String urlString, OnOnlineImportListener listener) {
         new Thread(() -> {
-            HttpURLConnection conn = null;
+            Handler mainHandler = new Handler(Looper.getMainLooper());
             try {
                 trustAllCertificates();
                 URL url = new URL(urlString);
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setInstanceFollowRedirects(true);
-                conn.setConnectTimeout(20000);
-                conn.setReadTimeout(20000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-                conn.connect();
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
-                int code = conn.getResponseCode();
-                if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP) {
-                    String newUrl = conn.getHeaderField("Location");
-                    conn.disconnect();
-                    url = new URL(newUrl);
-                    conn = (HttpURLConnection) url.openConnection();
-                    conn.setConnectTimeout(20000);
-                    conn.setReadTimeout(20000);
-                    conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-                    conn.connect();
-                    code = conn.getResponseCode();
-                }
-
-                if (code < 200 || code >= 300) {
-                    postError(listener, "下载失败，HTTP状态码: " + code);
+                int responseCode = conn.getResponseCode();
+                if (responseCode != 200) {
+                    postError(mainHandler, listener, "HTTP 错误: " + responseCode);
                     return;
                 }
 
@@ -121,18 +131,23 @@ public class M3uImporter {
                 fm.removeOnlineSlot(slotNumber);
 
                 String prefix = "[源" + slotNumber + "]";
-                List<DataRadioStation> stations = parseM3uStream(reader, prefix);
+                List<DataRadioStation> stations = parseM3uStream(reader, prefix, slotNumber);
 
                 if (stations.isEmpty()) {
-                    postError(listener, "未在链接中解析到有效的 M3U 频道");
+                    postError(mainHandler, listener, "未在 M3U 中解析到有效频道");
                     return;
                 }
 
                 for (DataRadioStation st : stations) {
                     fm.add(st);
                 }
+                fm.Save(); // 强制写入 SharedPreferences
 
-                new Handler(Looper.getMainLooper()).post(() -> {
+                // 刷新 UI
+                Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
+                LocalBroadcastManager.getInstance(context).sendBroadcast(local);
+
+                mainHandler.post(() -> {
                     if (listener != null) {
                         listener.onSuccess(slotNumber, stations.size());
                     }
@@ -140,47 +155,64 @@ public class M3uImporter {
 
             } catch (Exception e) {
                 Log.e(TAG, "importOnlineM3u error", e);
-                postError(listener, "导入失败: " + e.getMessage());
-            } finally {
-                if (conn != null) {
-                    conn.disconnect();
-                }
+                postError(mainHandler, listener, "网络或解析异常: " + e.getLocalizedMessage());
             }
         }).start();
     }
 
-    public static List<DataRadioStation> parseM3uStream(BufferedReader reader, String prefix) throws Exception {
-        List<DataRadioStation> list = new ArrayList<>();
-        String line;
-        String currentTitle = "电台频道";
-        while ((line = reader.readLine()) != null) {
-            line = line.trim();
-            if (line.startsWith("\uFEFF")) {
-                line = line.substring(1).trim();
-            }
-            if (line.isEmpty()) continue;
-            if (line.startsWith("#EXTINF:")) {
-                int commaIdx = line.indexOf(',');
-                if (commaIdx != -1 && commaIdx < line.length() - 1) {
-                    currentTitle = line.substring(commaIdx + 1).trim();
-                }
-            } else if (!line.startsWith("#")) {
-                DataRadioStation station = new DataRadioStation();
-                station.StationUuid = UUID.randomUUID().toString();
-                station.Name = (prefix != null ? prefix + " " : "") + currentTitle;
-                station.StreamUrl = line;
-                list.add(station);
-                currentTitle = "电台频道";
-            }
-        }
-        return list;
-    }
-
-    private static void postError(OnOnlineImportListener listener, String message) {
-        new Handler(Looper.getMainLooper()).post(() -> {
+    private static void postError(Handler handler, OnOnlineImportListener listener, String message) {
+        handler.post(() -> {
             if (listener != null) {
                 listener.onError(message);
             }
         });
+    }
+
+    /**
+     * 解析 M3U 数据流并正确封装 RadioDroid 的 DataRadioStation 对象
+     */
+    private static List<DataRadioStation> parseM3uStream(BufferedReader reader, String prefix, int slotNumber) throws Exception {
+        List<DataRadioStation> list = new ArrayList<>();
+        String line;
+        String currentName = null;
+
+        while ((line = reader.readLine()) != null) {
+            line = line.trim();
+            if (line.isEmpty()) continue;
+
+            // 过滤 UTF-8 BOM 头
+            if (line.startsWith("\uFEFF")) {
+                line = line.substring(1).trim();
+            }
+
+            if (line.startsWith("#EXTINF:") || line.startsWith("#EXTINF")) {
+                int commaIdx = line.indexOf(',');
+                if (commaIdx != -1 && commaIdx < line.length() - 1) {
+                    currentName = line.substring(commaIdx + 1).trim();
+                }
+            } else if (!line.startsWith("#")) {
+                if (line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp://") || line.startsWith("rtsp://")) {
+                    DataRadioStation st = new DataRadioStation();
+                    
+                    // 核心修复 1：使用正确的主键和 URL 字段，彻底解决 SharedPreferences 存不进、读不出的问题
+                    st.StationUuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
+                    st.Name = prefix + " " + ((currentName != null && !currentName.isEmpty()) ? currentName : "电台");
+                    st.Url = line;
+                    st.UrlResolved = line;
+
+                    // 核心修复 2：针对 rad1.m3u 的 .m3u8 流注入 HLS 和健康播放标志，防止被 StationsFilter 过滤隐形
+                    st.playable = true;
+                    st.lastcheckok = 1;
+                    st.has_extended_info = true;
+                    if (line.contains(".m3u8")) {
+                        st.Hls = 1;
+                    }
+
+                    list.add(st);
+                    currentName = null;
+                }
+            }
+        }
+        return list;
     }
 }
