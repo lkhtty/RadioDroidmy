@@ -36,7 +36,7 @@ public class M3uImporter {
         void onError(String message);
     }
 
-    // 适配 Android 5 车机：强制开启 TLSv1.2 并信任所有证书
+    // 适配 Android 5 车机：信任所有证书并强制开启 TLSv1.2
     @SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
     private static void trustAllCertificates() {
         try {
@@ -79,9 +79,9 @@ public class M3uImporter {
             for (DataRadioStation st : stations) {
                 fm.add(st);
             }
-            fm.Save(); // 强制写入 SharedPreferences 持久化落盘
+            fm.Save(); // 强制持久化保存到磁盘
 
-            // 广播通知刷新收藏夹
+            // 广播通知收藏夹界面立即刷新
             Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
             LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
@@ -119,7 +119,6 @@ public class M3uImporter {
                 HttpURLConnection conn = null;
                 int redirectCount = 0;
 
-                // 循环跟随重定向（最多 5 次），防止 CDN 跳转中断
                 while (redirectCount < 5) {
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setConnectTimeout(15000);
@@ -170,9 +169,9 @@ public class M3uImporter {
                 for (DataRadioStation st : stations) {
                     fm.add(st);
                 }
-                fm.Save(); // 强制持久化保存
+                fm.Save(); // 强制写入本地存储
 
-                // 立即通知刷新
+                // 发送全局广播立即更新列表
                 Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
                 LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
@@ -198,7 +197,7 @@ public class M3uImporter {
     }
 
     /**
-     * 解析 M3U 数据流（兼容属性标签、带/不带冒号、提取台名）
+     * 解析 M3U 数据流（只使用项目中真实存在的字段）
      */
     private static List<DataRadioStation> parseM3uStream(BufferedReader reader, String prefix, int slotNumber) throws Exception {
         List<DataRadioStation> list = new ArrayList<>();
@@ -215,7 +214,7 @@ public class M3uImporter {
             }
 
             if (line.startsWith("#EXTINF:") || line.startsWith("#EXTINF")) {
-                int commaIdx = line.lastIndexOf(','); // 取最后一个逗号后面的真实台名
+                int commaIdx = line.lastIndexOf(',');
                 if (commaIdx != -1 && commaIdx < line.length() - 1) {
                     currentName = line.substring(commaIdx + 1).trim();
                 }
@@ -225,15 +224,8 @@ public class M3uImporter {
                     
                     st.StationUuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
                     st.Name = prefix + " " + ((currentName != null && !currentName.isEmpty()) ? currentName : "电台");
-                    st.Url = line;
-                    st.UrlResolved = line;
-
-                    st.playable = true;
-                    st.lastcheckok = 1;
-                    st.has_extended_info = true;
-                    if (line.contains(".m3u8")) {
-                        st.Hls = 1;
-                    }
+                    st.StreamUrl = line;
+                    st.Hls = line.contains(".m3u8"); // boolean 类型赋值
 
                     list.add(st);
                     currentName = null;
