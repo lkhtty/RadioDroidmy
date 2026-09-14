@@ -270,7 +270,6 @@ public class M3uImporter {
 
                     String uuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
                     st.StationUuid = uuid;
-                    st.ID = uuid;
 
                     st.Name = prefix + " " + ((currentName != null && !currentName.isEmpty()) ? currentName : "电台");
                     st.StreamUrl = line;
