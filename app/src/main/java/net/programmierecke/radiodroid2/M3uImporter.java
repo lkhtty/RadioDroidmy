@@ -268,12 +268,9 @@ public class M3uImporter {
                 if (line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp://") || line.startsWith("rtsp://")) {
                     DataRadioStation st = new DataRadioStation();
 
-                    // 同时注入 StationUuid 和 ID，彻底杜绝空指针异常
                     String uuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
                     st.StationUuid = uuid;
                     st.ID = uuid;
-
-                    st.Name = prefix + " " + ((currentName != null && !currentName. = uuid;
 
                     st.Name = prefix + " " + ((currentName != null && !currentName.isEmpty()) ? currentName : "电台");
                     st.StreamUrl = line;
