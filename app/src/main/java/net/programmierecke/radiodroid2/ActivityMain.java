@@ -722,15 +722,15 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
             if (resultData != null) {
                 uri = resultData.getData();
                 Log.d(TAG, "Choosen load path: " + uri);
-                RadioDroidApp radioDroidApp = (RadioDroidApp) getApplication();
-                FavouriteManager favouriteManager = radioDroidApp.getFavouriteManager();
-                try{
-                    InputStream is = getContentResolver().openInputStream(uri);
-                    InputStreamReader reader = new InputStreamReader(is);
-                    favouriteManager.LoadM3USimple(reader);
+                try {
+                    int count = M3uImporter.importM3u(this, uri);
+                    if (count > 0) {
+                        Toast.makeText(this, "成功导入 " + count + " 个电台", Toast.LENGTH_SHORT).show();
+                    }
                 }
-                catch (Exception e){
+                catch (Exception e) {
                     Log.e(TAG, "Unable to load to file " + e);
+                    Toast.makeText(this, "导入出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
             }
         }
