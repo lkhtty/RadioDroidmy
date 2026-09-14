@@ -7,12 +7,15 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import net.programmierecke.radiodroid2.station.DataRadioStation;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
@@ -36,7 +39,7 @@ public class M3uImporter {
         void onError(String message);
     }
 
-    // 适配 Android 5 车机：信任所有证书并强制开启 TLSv1.2
+    // 适配车机：信任所有证书并强制开启 TLSv1.2
     @SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
     private static void trustAllCertificates() {
         try {
@@ -64,7 +67,10 @@ public class M3uImporter {
      */
     public static int importLocalFileStream(Context context, InputStream is) {
         try {
-            if (is == null) return 0;
+            if (is == null) {
+                showToast(context, "打开文件失败：文件流为空");
+                return 0;
+            }
             BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
 
             RadioDroidApp app = (RadioDroidApp) context.getApplicationContext();
@@ -76,10 +82,15 @@ public class M3uImporter {
             String prefix = "[源" + slotNumber + "]";
             List<DataRadioStation> stations = parseM3uStream(reader, prefix, slotNumber);
 
+            if (stations.isEmpty()) {
+                showToast(context, "未在文件中解析到有效频道");
+                return 0;
+            }
+
             for (DataRadioStation st : stations) {
                 fm.add(st);
             }
-            fm.Save(); // 强制持久化保存到磁盘
+            fm.Save(); // 强制持久化落盘
 
             // 广播通知收藏夹界面立即刷新
             Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
@@ -88,26 +99,56 @@ public class M3uImporter {
             return stations.size();
         } catch (Exception e) {
             Log.e(TAG, "importLocalFileStream error", e);
+            showToast(context, "导入异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             return 0;
         }
     }
 
     /**
-     * 本地 Uri 导入
+     * 本地 Uri 导入（同时兼容 content:// 与 file:// 路径）
      */
     public static int importM3u(Context context, Uri uri) {
         try {
-            InputStream is = context.getContentResolver().openInputStream(uri);
-            if (is == null) return 0;
+            if (uri == null) return 0;
+            InputStream is = null;
+
+            // 优先判断 file:// 协议或直接文件路径（车机文件管理器最常用）
+            if ("file".equalsIgnoreCase(uri.getScheme()) || (uri.getPath() != null && uri.getPath().startsWith("/"))) {
+                File file = new File(uri.getPath());
+                if (file.exists() && file.canRead()) {
+                    is = new FileInputStream(file);
+                }
+            }
+
+            // 如果上面没打开，再尝试 ContentResolver
+            if (is == null) {
+                try {
+                    is = context.getContentResolver().openInputStream(uri);
+                } catch (Exception ignored) {
+                    if (uri.getPath() != null) {
+                        File file = new File(uri.getPath());
+                        if (file.exists()) {
+                            is = new FileInputStream(file);
+                        }
+                    }
+                }
+            }
+
+            if (is == null) {
+                showToast(context, "无法读取文件，请检查文件路径或存储权限");
+                return 0;
+            }
+
             return importLocalFileStream(context, is);
         } catch (Exception e) {
             Log.e(TAG, "importM3u error", e);
+            showToast(context, "读取出错: " + e.getMessage());
             return 0;
         }
     }
 
     /**
-     * 在线网络 URL 导入（支持 CDN 301/302 重定向跟随）
+     * 在线网络 URL 导入
      */
     public static void importOnlineM3u(Context context, String urlString, OnOnlineImportListener listener) {
         new Thread(() -> {
@@ -169,9 +210,8 @@ public class M3uImporter {
                 for (DataRadioStation st : stations) {
                     fm.add(st);
                 }
-                fm.Save(); // 强制写入本地存储
+                fm.Save(); // 强制持久化保存
 
-                // 发送全局广播立即更新列表
                 Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
                 LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
@@ -196,8 +236,14 @@ public class M3uImporter {
         });
     }
 
+    private static void showToast(Context context, String message) {
+        new Handler(Looper.getMainLooper()).post(() -> 
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        );
+    }
+
     /**
-     * 解析 M3U 数据流（只使用项目中真实存在的字段）
+     * 解析 M3U 数据流
      */
     private static List<DataRadioStation> parseM3uStream(BufferedReader reader, String prefix, int slotNumber) throws Exception {
         List<DataRadioStation> list = new ArrayList<>();
@@ -221,11 +267,17 @@ public class M3uImporter {
             } else if (!line.startsWith("#")) {
                 if (line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp://") || line.startsWith("rtsp://")) {
                     DataRadioStation st = new DataRadioStation();
-                    
-                    st.StationUuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
+
+                    // 同时注入 StationUuid 和 ID，彻底杜绝空指针异常
+                    String uuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
+                    st.StationUuid = uuid;
+                    st.ID = uuid;
+
+                    st.Name = prefix + " " + ((currentName != null && !currentName. = uuid;
+
                     st.Name = prefix + " " + ((currentName != null && !currentName.isEmpty()) ? currentName : "电台");
                     st.StreamUrl = line;
-                    st.Hls = line.contains(".m3u8"); // boolean 类型赋值
+                    st.Hls = line.contains(".m3u8");
 
                     list.add(st);
                     currentName = null;
