@@ -36,7 +36,7 @@ public class M3uImporter {
         void onError(String message);
     }
 
-    // 豁免 Android Lint 静态安全审查，信任所有证书以兼容老旧车机 Android 5
+    // 适配 Android 5 车机：强制开启 TLSv1.2 并信任所有证书
     @SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
     private static void trustAllCertificates() {
         try {
@@ -47,7 +47,12 @@ public class M3uImporter {
                     public void checkServerTrusted(X509Certificate[] certs, String authType) {}
                 }
             };
-            SSLContext sc = SSLContext.getInstance("TLS");
+            SSLContext sc;
+            try {
+                sc = SSLContext.getInstance("TLSv1.2");
+            } catch (Exception e) {
+                sc = SSLContext.getInstance("TLS");
+            }
             sc.init(null, trustAllCerts, new java.security.SecureRandom());
             HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
             HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
@@ -76,7 +81,7 @@ public class M3uImporter {
             }
             fm.Save(); // 强制写入 SharedPreferences 持久化落盘
 
-            // 发送全局广播，通知收藏夹列表立即刷新显示
+            // 广播通知刷新收藏夹
             Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
             LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
@@ -88,7 +93,7 @@ public class M3uImporter {
     }
 
     /**
-     * 通过 Uri 导入本地文件
+     * 本地 Uri 导入
      */
     public static int importM3u(Context context, Uri uri) {
         try {
@@ -102,22 +107,46 @@ public class M3uImporter {
     }
 
     /**
-     * 在线网络 URL 导入
+     * 在线网络 URL 导入（支持 CDN 301/302 重定向跟随）
      */
     public static void importOnlineM3u(Context context, String urlString, OnOnlineImportListener listener) {
         new Thread(() -> {
             Handler mainHandler = new Handler(Looper.getMainLooper());
             try {
                 trustAllCertificates();
-                URL url = new URL(urlString);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
 
-                int responseCode = conn.getResponseCode();
-                if (responseCode != 200) {
-                    postError(mainHandler, listener, "HTTP 错误: " + responseCode);
+                URL url = new URL(urlString);
+                HttpURLConnection conn = null;
+                int redirectCount = 0;
+
+                // 循环跟随重定向（最多 5 次），防止 CDN 跳转中断
+                while (redirectCount < 5) {
+                    conn = (HttpURLConnection) url.openConnection();
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(15000);
+                    conn.setInstanceFollowRedirects(true);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
+                    int responseCode = conn.getResponseCode();
+                    if (responseCode == HttpURLConnection.HTTP_MOVED_PERM 
+                            || responseCode == HttpURLConnection.HTTP_MOVED_TEMP 
+                            || responseCode == 307 || responseCode == 308) {
+                        String newUrl = conn.getHeaderField("Location");
+                        if (newUrl != null && !newUrl.isEmpty()) {
+                            url = new URL(newUrl);
+                            redirectCount++;
+                            continue;
+                        }
+                    }
+                    if (responseCode != 200) {
+                        postError(mainHandler, listener, "HTTP 错误: " + responseCode);
+                        return;
+                    }
+                    break;
+                }
+
+                if (conn == null) {
+                    postError(mainHandler, listener, "网络连接失败");
                     return;
                 }
 
@@ -141,9 +170,9 @@ public class M3uImporter {
                 for (DataRadioStation st : stations) {
                     fm.add(st);
                 }
-                fm.Save(); // 强制写入 SharedPreferences
+                fm.Save(); // 强制持久化保存
 
-                // 刷新 UI
+                // 立即通知刷新
                 Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
                 LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
@@ -169,7 +198,7 @@ public class M3uImporter {
     }
 
     /**
-     * 解析 M3U 数据流并正确封装 RadioDroid 的 DataRadioStation 对象
+     * 解析 M3U 数据流（兼容属性标签、带/不带冒号、提取台名）
      */
     private static List<DataRadioStation> parseM3uStream(BufferedReader reader, String prefix, int slotNumber) throws Exception {
         List<DataRadioStation> list = new ArrayList<>();
@@ -186,7 +215,7 @@ public class M3uImporter {
             }
 
             if (line.startsWith("#EXTINF:") || line.startsWith("#EXTINF")) {
-                int commaIdx = line.indexOf(',');
+                int commaIdx = line.lastIndexOf(','); // 取最后一个逗号后面的真实台名
                 if (commaIdx != -1 && commaIdx < line.length() - 1) {
                     currentName = line.substring(commaIdx + 1).trim();
                 }
@@ -194,13 +223,11 @@ public class M3uImporter {
                 if (line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp://") || line.startsWith("rtsp://")) {
                     DataRadioStation st = new DataRadioStation();
                     
-                    // 核心修复 1：使用正确的主键和 URL 字段，彻底解决 SharedPreferences 存不进、读不出的问题
                     st.StationUuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
                     st.Name = prefix + " " + ((currentName != null && !currentName.isEmpty()) ? currentName : "电台");
                     st.Url = line;
                     st.UrlResolved = line;
 
-                    // 核心修复 2：针对 rad1.m3u 的 .m3u8 流注入 HLS 和健康播放标志，防止被 StationsFilter 过滤隐形
                     st.playable = true;
                     st.lastcheckok = 1;
                     st.has_extended_info = true;
