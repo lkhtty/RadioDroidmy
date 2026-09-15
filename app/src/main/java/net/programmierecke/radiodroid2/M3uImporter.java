@@ -86,21 +86,21 @@ public class M3uImporter {
         if (data == null || data.length == 0) return "";
 
         // 1. Windows Unicode (UTF-16LE 签名: FF FE)
-        if (data.length >= 2 && (data[0] & 0xFF) == 0xFF && (data & 0xFF) == 0xFE) {
+        if (data.length >= 2 && (data[0] & 0xFF) == 0xFF && (data[1] & 0xFF) == 0xFE) {
             try {
                 return new String(data, 2, data.length - 2, "UTF-16LE");
             } catch (Exception ignored) {}
         }
 
         // 2. UTF-16BE (签名: FE FF)
-        if (data.length >= 2 && (data[0] & 0xFF) == 0xFE && (data & 0xFF) == 0xFF) {
+        if (data.length >= 2 && (data[0] & 0xFF) == 0xFE && (data[1] & 0xFF) == 0xFF) {
             try {
                 return new String(data, 2, data.length - 2, "UTF-16BE");
             } catch (Exception ignored) {}
         }
 
         // 3. UTF-8 带 BOM (签名: EF BB BF)
-        if (data.length >= 3 && (data[0] & 0xFF) == 0xEF && (data & 0xFF) == 0xBB && (data & 0xFF) == 0xBF) {
+        if (data.length >= 3 && (data[0] & 0xFF) == 0xEF && (data[1] & 0xFF) == 0xBB && (data[2] & 0xFF) == 0xBF) {
             try {
                 return new String(data, 3, data.length - 3, "UTF-8");
             } catch (Exception ignored) {}
@@ -121,7 +121,6 @@ public class M3uImporter {
             }
         }
     }
-
     /**
      * 本地文件流导入
      */
