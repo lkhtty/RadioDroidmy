@@ -20,10 +20,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +39,6 @@ public class M3uImporter {
         void onError(String message);
     }
 
-    // 适配车机：信任所有证书并强制开启 TLSv1.2
     @SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
     private static void trustAllCertificates() {
         try {
@@ -66,16 +61,6 @@ public class M3uImporter {
         } catch (Exception ignored) {}
     }
 
-    /**
-     * 安全获取字节并转为正整数（避开平台过滤器）
-     */
-    private static int getByte(byte[] data, int index) {
-        return data[index] & 0xFF;
-    }
-
-    /**
-     * 将输入流完整读成字节数组
-     */
     private static byte[] readStreamToBytes(InputStream is) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buffer = new byte[8192];
@@ -86,52 +71,37 @@ public class M3uImporter {
         return baos.toByteArray();
     }
 
-    /**
-     * 字节级编码自适应探测（完美兼容 UTF-16LE, UTF-16BE, UTF-8-BOM, 标准UTF-8, GBK/GB18030）
-     */
+    // 彻底抛弃位运算与数组下标，改用原生试探解码，绝无任何类型错误
     private static String decodeBytesToString(byte[] data) {
         if (data == null || data.length == 0) return "";
 
-        // 1. Windows Unicode (UTF-16LE 签名: FF FE)
-        if (data.length >= 2 && getByte(data, 0) == 0xFF && getByte(data, 1) == 0xFE) {
-            try {
-                return new String(data, 2, data.length - 2, "UTF-16LE");
-            } catch (Exception ignored) {}
-        }
-
-        // 2. UTF-16BE (签名: FE FF)
-        if (data.length >= 2 && getByte(data, 0) == 0xFE && getByte(data, 1) == 0xFF) {
-            try {
-                return new String(data, 2, data.length - 2, "UTF-16BE");
-            } catch (Exception ignored) {}
-        }
-
-        // 3. UTF-8 带 BOM (签名: EF BB BF)
-        if (data.length >= 3 && getByte(data, 0) == 0xEF && getByte(data, 1) == 0xBB && getByte(data, 2) == 0xBF) {
-            try {
-                return new String(data, 3, data.length - 3, "UTF-8");
-            } catch (Exception ignored) {}
-        }
-
-        // 4. 优先尝试标准 UTF-8 严格解码
         try {
-            CharsetDecoder decoder = Charset.forName("UTF-8").newDecoder();
-            decoder.onMalformedInput(CodingErrorAction.REPORT);
-            decoder.onUnmappableCharacter(CodingErrorAction.REPORT);
-            return decoder.decode(ByteBuffer.wrap(data)).toString();
-        } catch (Exception e) {
-            // 5. 解码失败自动平滑降级到 GB18030 / GBK
-            try {
-                return new String(data, "GB18030");
-            } catch (Exception ignored) {
-                return new String(data);
+            String s = new String(data, "UTF-8");
+            if (s.contains("#EXTINF") || s.contains("http://") || s.contains("https://")) {
+                if (s.startsWith("\uFEFF")) {
+                    s = s.substring(1);
+                }
+                return s;
             }
-        }
+        } catch (Exception ignored) {}
+
+        try {
+            String s = new String(data, "GB18030");
+            if (s.contains("#EXTINF") || s.contains("http://") || s.contains("https://")) {
+                return s;
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            String s = new String(data, "UTF-16");
+            if (s.contains("#EXTINF") || s.contains("http://") || s.contains("https://")) {
+                return s;
+            }
+        } catch (Exception ignored) {}
+
+        return new String(data);
     }
 
-    /**
-     * 本地文件流导入
-     */
     public static int importLocalFileStream(Context context, InputStream is) {
         try {
             if (is == null) {
@@ -164,9 +134,8 @@ public class M3uImporter {
             for (DataRadioStation st : stations) {
                 fm.add(st);
             }
-            fm.Save(); // 强制持久化保存
+            fm.Save();
 
-            // 广播通知刷新收藏夹界面
             Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
             LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
@@ -179,15 +148,11 @@ public class M3uImporter {
         }
     }
 
-    /**
-     * 本地 Uri 导入（自适应直读本地路径与 ContentResolver）
-     */
     public static int importM3u(Context context, Uri uri) {
         try {
             if (uri == null) return 0;
             InputStream is = null;
 
-            // 优先尝试从本地物理文件路径直读（兼容车机 USB / SD 卡）
             if ("file".equalsIgnoreCase(uri.getScheme()) 
                     || (uri.getPath() != null && (uri.getPath().startsWith("/storage") || uri.getPath().startsWith("/mnt") || uri.getPath().startsWith("/sdcard")))) {
                 try {
@@ -198,14 +163,12 @@ public class M3uImporter {
                 } catch (Exception ignored) {}
             }
 
-            // 尝试 ContentResolver 打开
             if (is == null) {
                 try {
                     is = context.getContentResolver().openInputStream(uri);
                 } catch (Exception ignored) {}
             }
 
-            // 兜底尝试
             if (is == null && uri.getPath() != null) {
                 try {
                     File file = new File(uri.getPath());
@@ -228,9 +191,6 @@ public class M3uImporter {
         }
     }
 
-    /**
-     * 在线网络 URL 导入
-     */
     public static void importOnlineM3u(Context context, String urlString, OnOnlineImportListener listener) {
         new Thread(() -> {
             Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -329,9 +289,6 @@ public class M3uImporter {
         );
     }
 
-    /**
-     * 全兼容 M3U / TXT 直播源多格式解析引擎
-     */
     private static List<DataRadioStation> parseM3uText(String content, String prefix, int slotNumber) {
         List<DataRadioStation> list = new ArrayList<>();
         if (content == null || content.isEmpty()) return list;
@@ -355,7 +312,6 @@ public class M3uImporter {
                 if (line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp://") || line.startsWith("rtsp://")) {
                     url = line;
                 } else if (line.contains(",")) {
-                    // 兼容国内直播源 TXT 格式: 频道名,http://...
                     int commaIdx = line.indexOf(',');
                     name = line.substring(0, commaIdx).trim();
                     url = line.substring(commaIdx + 1).trim();
@@ -364,7 +320,6 @@ public class M3uImporter {
                 if (!url.isEmpty() && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("rtmp://") || url.startsWith("rtsp://"))) {
                     DataRadioStation st = new DataRadioStation();
 
-                    // 只使用工程确认存在的合法字段
                     st.StationUuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
                     st.Name = prefix + " " + ((name != null && !name.isEmpty()) ? name : "电台");
                     st.StreamUrl = url;
