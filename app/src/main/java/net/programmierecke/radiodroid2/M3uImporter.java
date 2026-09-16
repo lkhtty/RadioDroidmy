@@ -348,6 +348,7 @@ public class M3uImporter {
                 if (line.startsWith("http://") || line.startsWith("https://") || line.startsWith("rtmp://") || line.startsWith("rtsp://")) {
                     url = line;
                 } else if (line.contains(",")) {
+                    // 兼容国内直播源 TXT 格式: 频道名,http://...
                     int commaIdx = line.indexOf(',');
                     name = line.substring(0, commaIdx).trim();
                     url = line.substring(commaIdx + 1).trim();
