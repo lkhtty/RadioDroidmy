@@ -70,6 +70,7 @@ import net.programmierecke.radiodroid2.station.StationsFilter;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -79,9 +80,6 @@ import java.util.Date;
 import okhttp3.OkHttpClient;
 
 import static net.programmierecke.radiodroid2.service.MediaSessionCallback.EXTRA_STATION_UUID;
-import android.content.Intent;
-import android.net.Uri;
-import android.widget.Toast;
 
 public class ActivityMain extends AppCompatActivity implements SearchView.OnQueryTextListener,
         NavigationView.OnNavigationItemSelectedListener,
@@ -723,28 +721,13 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                 uri = resultData.getData();
                 Log.d(TAG, "Choosen load path: " + uri);
                 try {
-                    int count = M3uImporter.importM3u(this, uri);
-                    if (count > 0) {
-                        Toast.makeText(this, "成功导入 " + count + " 个电台", Toast.LENGTH_SHORT).show();
-                    }
+                    M3uImporter.importM3u(this, uri);
+                    mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
                 }
                 catch (Exception e) {
                     Log.e(TAG, "Unable to load to file " + e);
                     Toast.makeText(this, "导入出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                 }
-            }
-        }
-        if (requestCode == 9981 && resultCode == RESULT_OK && resultData != null) {
-            Uri uri = resultData.getData();
-            if (uri != null) {
-                Toast.makeText(this, "Importing M3U...", Toast.LENGTH_SHORT).show();
-                new Thread(() -> {
-                    int count = M3uImporter.importM3u(this, uri);
-                    runOnUiThread(() -> {
-                        Toast.makeText(this, "Imported " + count + " stations to Favorites", Toast.LENGTH_LONG).show();
-                        recreate();
-                    });
-                }).start();
             }
         }
     }
@@ -764,7 +747,14 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                     historyManager.SaveM3U(file.getParent(), file.getName());
                 }
             } else if (dialog instanceof OpenFileDialog) {
-                favouriteManager.LoadM3U(file.getParent(), file.getName());
+                // 车机核心修复：直接将本地文件流传递给 M3uImporter，彻底绕过原版要求 UUID 的老逻辑
+                try {
+                    InputStream is = new FileInputStream(file);
+                    M3uImporter.importLocalFileStream(this, is);
+                } catch (Exception e) {
+                    Log.e("MAIN", "import stream fail, fallback to uri: " + e);
+                    M3uImporter.importM3u(this, Uri.fromFile(file));
+                }
                 mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
             }
         } catch (Exception e) {
@@ -992,32 +982,8 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
         }
     }
 
-//    public void togglePlayer() {
-//        FragmentTransaction fragmentTransaction = mFragmentManager.beginTransaction();
-//        if (smallPlayerFragment.isDetached()) {
-//            fragmentTransaction.attach(smallPlayerFragment);
-//            fragmentTransaction.detach(fullPlayerFragment);
-//        } else {
-//            fragmentTransaction.attach(fullPlayerFragment);
-//            fragmentTransaction.detach(smallPlayerFragment);
-//        }
-//
-//        fragmentTransaction.commit();
-//    }
-
     @Override
     public boolean onQueryTextSubmit(String query) {
-//        String queryEncoded;
-//        try {
-//            mSearchView.setQuery("", false);
-//            mSearchView.clearFocus();
-//            mSearchView.setIconified(true);
-//            queryEncoded = URLEncoder.encode(query, "utf-8");
-//            queryEncoded = queryEncoded.replace("+", "%20");
-//            SearchStations(query);
-//        } catch (UnsupportedEncodingException e) {
-//            e.printStackTrace();
-//        }
         return true;
     }
 
@@ -1176,6 +1142,7 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
     public void invalidateOptionsMenuForCast() {
         invalidateOptionsMenu();
     }
+
     private void showImportOnlineM3uDialog() {
         final android.widget.EditText input = new android.widget.EditText(this);
         input.setHint("http:// 或 https:// 开头的链接");
