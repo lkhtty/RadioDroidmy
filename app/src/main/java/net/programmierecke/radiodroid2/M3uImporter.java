@@ -39,7 +39,6 @@ public class M3uImporter {
         void onError(String message);
     }
 
-    @SuppressLint({"TrustAllX509TrustManager", "BadHostnameVerifier"})
     private static void trustAllCertificates() {
         try {
             TrustManager[] trustAllCerts = new TrustManager[]{
@@ -71,7 +70,6 @@ public class M3uImporter {
         return baos.toByteArray();
     }
 
-    // 彻底抛弃位运算与数组下标，改用原生试探解码，绝无任何类型错误
     private static String decodeBytesToString(byte[] data) {
         if (data == null || data.length == 0) return "";
 
@@ -102,6 +100,7 @@ public class M3uImporter {
         return new String(data);
     }
 
+    // 本地文件导入：不占用在线 1/2/3 槽位，不加 [源X] 前缀，永久保存在收藏夹
     public static int importLocalFileStream(Context context, InputStream is) {
         try {
             if (is == null) {
@@ -111,7 +110,7 @@ public class M3uImporter {
 
             byte[] data = readStreamToBytes(is);
             if (data.length == 0) {
-                showToast(context, "文件内容为空（0 字节），请检查存储权限或路径");
+                showToast(context, "文件内容为空（0 字节），请检查路径或存储权限");
                 return 0;
             }
 
@@ -120,11 +119,7 @@ public class M3uImporter {
             RadioDroidApp app = (RadioDroidApp) context.getApplicationContext();
             FavouriteManager fm = app.getFavouriteManager();
 
-            int slotNumber = fm.getNextOnlineSlot();
-            fm.removeOnlineSlot(slotNumber);
-
-            String prefix = "[源" + slotNumber + "]";
-            List<DataRadioStation> stations = parseM3uText(content, prefix, slotNumber);
+            List<DataRadioStation> stations = parseM3uText(content, "", 0);
 
             if (stations.isEmpty()) {
                 showToast(context, "读取到 " + data.length + " 字节，但未识别到有效频道");
@@ -139,7 +134,7 @@ public class M3uImporter {
             Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
             LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
-            showToast(context, "成功导入 " + stations.size() + " 个电台");
+            showToast(context, "成功导入 " + stations.size() + " 个本地电台");
             return stations.size();
         } catch (Exception e) {
             Log.e(TAG, "importLocalFileStream error", e);
@@ -191,6 +186,7 @@ public class M3uImporter {
         }
     }
 
+    // 在线 M3U 导入：自动按 [源1]、[源2]、[源3] 循环覆盖
     public static void importOnlineM3u(Context context, String urlString, OnOnlineImportListener listener) {
         new Thread(() -> {
             Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -320,8 +316,19 @@ public class M3uImporter {
                 if (!url.isEmpty() && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("rtmp://") || url.startsWith("rtsp://"))) {
                     DataRadioStation st = new DataRadioStation();
 
-                    st.StationUuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
-                    st.Name = prefix + " " + ((name != null && !name.isEmpty()) ? name : "电台");
+                    if (slotNumber > 0) {
+                        st.StationUuid = "online_" + slotNumber + "_" + UUID.randomUUID().toString();
+                    } else {
+                        st.StationUuid = "local_" + UUID.randomUUID().toString();
+                    }
+
+                    String displayName = (name != null && !name.isEmpty()) ? name : "电台";
+                    if (prefix != null && !prefix.isEmpty()) {
+                        st.Name = prefix + " " + displayName;
+                    } else {
+                        st.Name = displayName;
+                    }
+
                     st.StreamUrl = url;
                     st.Hls = url.contains(".m3u8");
 
