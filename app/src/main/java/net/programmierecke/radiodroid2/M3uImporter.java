@@ -67,6 +67,13 @@ public class M3uImporter {
     }
 
     /**
+     * 安全获取字节并转为正整数（避开平台过滤器）
+     */
+    private static int getByte(byte[] data, int index) {
+        return data[index] & 0xFF;
+    }
+
+    /**
      * 将输入流完整读成字节数组
      */
     private static byte[] readStreamToBytes(InputStream is) throws IOException {
@@ -86,21 +93,21 @@ public class M3uImporter {
         if (data == null || data.length == 0) return "";
 
         // 1. Windows Unicode (UTF-16LE 签名: FF FE)
-        if (data.length >= 2 && (data[0] & 0xFF) == 0xFF && (data & 0xFF) == 0xFE) {
+        if (data.length >= 2 && getByte(data, 0) == 0xFF && getByte(data, 1) == 0xFE) {
             try {
                 return new String(data, 2, data.length - 2, "UTF-16LE");
             } catch (Exception ignored) {}
         }
 
         // 2. UTF-16BE (签名: FE FF)
-        if (data.length >= 2 && (data[0] & 0xFF) == 0xFE && (data & 0xFF) == 0xFF) {
+        if (data.length >= 2 && getByte(data, 0) == 0xFE && getByte(data, 1) == 0xFF) {
             try {
                 return new String(data, 2, data.length - 2, "UTF-16BE");
             } catch (Exception ignored) {}
         }
 
         // 3. UTF-8 带 BOM (签名: EF BB BF)
-        if (data.length >= 3 && (data[0] & 0xFF) == 0xEF && (data & 0xFF) == 0xBB && (data & 0xFF) == 0xBF) {
+        if (data.length >= 3 && getByte(data, 0) == 0xEF && getByte(data, 1) == 0xBB && getByte(data, 2) == 0xBF) {
             try {
                 return new String(data, 3, data.length - 3, "UTF-8");
             } catch (Exception ignored) {}
