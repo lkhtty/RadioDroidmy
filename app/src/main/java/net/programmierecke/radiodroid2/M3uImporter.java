@@ -100,7 +100,6 @@ public class M3uImporter {
         return new String(data);
     }
 
-    // 本地文件导入：不占用在线 1/2/3 槽位，不加 [源X] 前缀，永久保存在收藏夹
     public static int importLocalFileStream(Context context, InputStream is) {
         try {
             if (is == null) {
@@ -132,13 +131,14 @@ public class M3uImporter {
             fm.Save();
 
             Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
+            local.putExtra(DataRadioStation.RADIO_STATION_UUID, "all");
             LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
             showToast(context, "成功导入 " + stations.size() + " 个本地电台");
             return stations.size();
-        } catch (Exception e) {
-            Log.e(TAG, "importLocalFileStream error", e);
-            showToast(context, "导入异常: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+        } catch (Throwable t) {
+            Log.e(TAG, "importLocalFileStream fatal error", t);
+            showToast(context, "导入异常: " + t.getClass().getSimpleName() + " - " + t.getMessage());
             return 0;
         }
     }
@@ -179,14 +179,13 @@ public class M3uImporter {
             }
 
             return importLocalFileStream(context, is);
-        } catch (Exception e) {
-            Log.e(TAG, "importM3u error", e);
-            showToast(context, "读取出错: " + e.getMessage());
+        } catch (Throwable t) {
+            Log.e(TAG, "importM3u fatal error", t);
+            showToast(context, "读取出错: " + t.getMessage());
             return 0;
         }
     }
 
-    // 在线 M3U 导入：自动按 [源1]、[源2]、[源3] 循环覆盖
     public static void importOnlineM3u(Context context, String urlString, OnOnlineImportListener listener) {
         new Thread(() -> {
             Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -256,6 +255,7 @@ public class M3uImporter {
                 fm.Save();
 
                 Intent local = new Intent(DataRadioStation.RADIO_STATION_LOCAL_INFO_CHAGED);
+                local.putExtra(DataRadioStation.RADIO_STATION_UUID, "all");
                 LocalBroadcastManager.getInstance(context).sendBroadcast(local);
 
                 mainHandler.post(() -> {
@@ -264,9 +264,9 @@ public class M3uImporter {
                     }
                 });
 
-            } catch (Exception e) {
-                Log.e(TAG, "importOnlineM3u error", e);
-                postError(mainHandler, listener, "网络或解析异常: " + e.getLocalizedMessage());
+            } catch (Throwable t) {
+                Log.e(TAG, "importOnlineM3u fatal error", t);
+                postError(mainHandler, listener, "网络或解析异常: " + t.getLocalizedMessage());
             }
         }).start();
     }
@@ -332,22 +332,18 @@ public class M3uImporter {
                     st.StreamUrl = url;
                     st.Hls = url.contains(".m3u8");
 
-                    // 必须加上这些初始值，绝不能留 null：
+                    // 真实存在的字段，赋非空默认值
                     st.HomePageUrl = "";
                     st.IconUrl = "";
                     st.Country = "";
                     st.CountryCode = "";
                     st.State = "";
                     st.Language = "";
-                    st.Tags = "";
                     st.Codec = st.Hls ? "HLS" : "MP3";
                     st.Bitrate = 128;
                     st.Votes = 0;
-                    st.NegativeVotes = 0;
-                    st.LastCheckOk = 1;
                     st.ClickCount = 0;
                     st.ClickTrend = 0;
-                    st.HasExtendedInfo = false;
 
                     list.add(st);
                     currentName = null;
