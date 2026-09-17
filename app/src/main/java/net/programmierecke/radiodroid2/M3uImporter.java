@@ -332,6 +332,23 @@ public class M3uImporter {
                     st.StreamUrl = url;
                     st.Hls = url.contains(".m3u8");
 
+                    // 必须加上这些初始值，绝不能留 null：
+                    st.HomePageUrl = "";
+                    st.IconUrl = "";
+                    st.Country = "";
+                    st.CountryCode = "";
+                    st.State = "";
+                    st.Language = "";
+                    st.Tags = "";
+                    st.Codec = st.Hls ? "HLS" : "MP3";
+                    st.Bitrate = 128;
+                    st.Votes = 0;
+                    st.NegativeVotes = 0;
+                    st.LastCheckOk = 1;
+                    st.ClickCount = 0;
+                    st.ClickTrend = 0;
+                    st.HasExtendedInfo = false;
+
                     list.add(st);
                     currentName = null;
                 }
