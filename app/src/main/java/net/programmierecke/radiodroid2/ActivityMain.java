@@ -747,15 +747,24 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                     historyManager.SaveM3U(file.getParent(), file.getName());
                 }
             } else if (dialog instanceof OpenFileDialog) {
-                // 车机核心修复：直接将本地文件流传递给 M3uImporter，彻底绕过原版要求 UUID 的老逻辑
-                try {
-                    InputStream is = new FileInputStream(file);
-                    M3uImporter.importLocalFileStream(this, is);
-                } catch (Exception e) {
-                    Log.e("MAIN", "import stream fail, fallback to uri: " + e);
-                    M3uImporter.importM3u(this, Uri.fromFile(file));
-                }
-                mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    try {
+                        InputStream is = new FileInputStream(file);
+                        M3uImporter.importLocalFileStream(ActivityMain.this, is);
+                    } catch (Throwable t) {
+                        Log.e("MAIN", "import stream fail, fallback to uri: " + t);
+                        try {
+                            M3uImporter.importM3u(ActivityMain.this, Uri.fromFile(file));
+                        } catch (Throwable ignored) {}
+                    }
+                    try {
+                        mFragmentManager.beginTransaction()
+                                .replace(R.id.containerView, new FragmentStarred())
+                                .commitAllowingStateLoss();
+                    } catch (Throwable t) {
+                        Log.e("MAIN", "replace fragment error: " + t);
+                    }
+                });
             }
         } catch (Exception e) {
             Log.e("MAIN", e.toString());
@@ -813,22 +822,12 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
 
                 return true;
             case R.id.action_load:
+            case R.id.action_import_m3u:
                 try {
-                    if (Utils.verifyStoragePermissions(this, PERM_REQ_STORAGE_FAV_LOAD)) {
-                        LoadFavourites();
-                    }
-                } catch (Exception e) {
-                    Log.e("MAIN", e.toString());
-                }
-                return true;
-           case R.id.action_import_m3u:
-                try {
-                    // 先检查车机存储读写权限，有权限直接弹窗，没权限自动申请权限
-                    if (Utils.verifyStoragePermissions(this, PERM_REQ_STORAGE_FAV_LOAD)) {
-                        LoadFavourites();
-                    }
-                } catch (Exception e) {
-                    Log.e("MAIN", "Load error: " + e);
+                    LoadFavourites();
+                } catch (Throwable t) {
+                    Log.e("MAIN", "Load error: " + t);
+                    Toast.makeText(this, "打开文件选择器失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
                 }
                 return true;
             case R.id.action_import_online_m3u:
