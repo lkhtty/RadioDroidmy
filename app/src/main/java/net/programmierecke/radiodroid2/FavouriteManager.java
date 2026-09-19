@@ -119,7 +119,7 @@ public class FavouriteManager extends StationSaveManager {
     }
 
     // =========================================================================
-    // 核心重写：直接接管车机本地 M3U 导入，批量添加，单次存盘，彻底消除闪退
+    // 核心重写：直接重写官方父类的 LoadM3U 方法，批量添加，单次存盘，彻底消除闪退
     // =========================================================================
     @Override
     public void LoadM3U(String path, String name) {
@@ -160,7 +160,7 @@ public class FavouriteManager extends StationSaveManager {
         }
     }
 
-    @Override
+    // 辅助解析方法（移除了错误的 @Override，保证编译正常）
     public void LoadM3USimple(InputStreamReader reader) {
         try {
             BufferedReader br = new BufferedReader(reader);
