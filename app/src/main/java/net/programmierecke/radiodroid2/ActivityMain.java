@@ -747,24 +747,8 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                     historyManager.SaveM3U(file.getParent(), file.getName());
                 }
             } else if (dialog instanceof OpenFileDialog) {
-                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-                    try {
-                        InputStream is = new FileInputStream(file);
-                        M3uImporter.importLocalFileStream(ActivityMain.this, is);
-                    } catch (Throwable t) {
-                        Log.e("MAIN", "import stream fail, fallback to uri: " + t);
-                        try {
-                            M3uImporter.importM3u(ActivityMain.this, Uri.fromFile(file));
-                        } catch (Throwable ignored) {}
-                    }
-                    try {
-                        mFragmentManager.beginTransaction()
-                                .replace(R.id.containerView, new FragmentStarred())
-                                .commitAllowingStateLoss();
-                    } catch (Throwable t) {
-                        Log.e("MAIN", "replace fragment error: " + t);
-                    }
-                });
+                favouriteManager.LoadM3U(file.getParent(), file.getName());
+                mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
             }
         } catch (Exception e) {
             Log.e("MAIN", e.toString());
