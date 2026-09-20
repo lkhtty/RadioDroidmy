@@ -773,14 +773,92 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
     }
 
     void LoadFavourites() {
-        OpenFileDialog dialogOpen = new OpenFileDialog();
-        dialogOpen.setStyle(DialogFragment.STYLE_NO_TITLE, Utils.getThemeResId(this));
-        Bundle argsOpen = new Bundle();
-        argsOpen.putString(FileDialog.EXTENSION, ".m3u"); // file extension is optional
-        dialogOpen.setArguments(argsOpen);
-        dialogOpen.show(getSupportFragmentManager(), OpenFileDialog.class.getName());
+        // 从车机外部存储根目录开始浏览（包含内部存储与插入的U盘）
+        File startDir = android.os.Environment.getExternalStorageDirectory();
+        showInAppFilePicker(startDir);
     }
 
+    private void showInAppFilePicker(final File currentDir) {
+        if (currentDir == null || !currentDir.exists()) {
+            Toast.makeText(this, "存储路径不存在", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        File[] allFiles = currentDir.listFiles();
+        final java.util.List<File> dirList = new java.util.ArrayList<>();
+        final java.util.List<File> m3uList = new java.util.ArrayList<>();
+
+        if (allFiles != null) {
+            for (File f : allFiles) {
+                if (f.isDirectory() && !f.isHidden() && !f.getName().startsWith(".")) {
+                    dirList.add(f);
+                } else if (f.isFile()) {
+                    String name = f.getName().toLowerCase();
+                    if (name.endsWith(".m3u") || name.endsWith(".m3u8")) {
+                        m3uList.add(f);
+                    }
+                }
+            }
+        }
+
+        // 构造展示项
+        java.util.Collections.sort(dirList);
+        java.util.Collections.sort(m3uList);
+
+        final java.util.List<String> displayNames = new java.util.ArrayList<>();
+        final java.util.List<File> itemTargets = new java.util.ArrayList<>();
+
+        // 如果不是根目录，加一个“返回上一级”
+        if (currentDir.getParentFile() != null && currentDir.getParentFile().canRead()) {
+            displayNames.add("📂 .. (返回上一级)");
+            itemTargets.add(currentDir.getParentFile());
+        }
+
+        // 先列出所有文件夹
+        for (File d : dirList) {
+            displayNames.add("📁 " + d.getName() + "/");
+            itemTargets.add(d);
+        }
+
+        // 再列出当前目录下的所有 M3U 文件
+        for (File m : m3uList) {
+            displayNames.add("🎵 " + m.getName());
+            itemTargets.add(m);
+        }
+
+        if (displayNames.isEmpty()) {
+            displayNames.add("(此目录下没有文件夹或 M3U 文件)");
+            itemTargets.add(null);
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("选择 M3U: " + currentDir.getName());
+        builder.setItems(displayNames.toArray(new String[0]), new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                File chosen = itemTargets.get(which);
+                if (chosen == null) return;
+
+                if (chosen.isDirectory()) {
+                    // 点击文件夹：进入下一层目录
+                    showInAppFilePicker(chosen);
+                } else {
+                    // 点击了具体的 M3U 文件：调用原本的 LoadM3U 导入并刷新界面
+                    try {
+                        RadioDroidApp radioDroidApp = (RadioDroidApp) getApplication();
+                        radioDroidApp.getFavouriteManager().LoadM3U(chosen.getParent(), chosen.getName());
+                        mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
+                        Toast.makeText(ActivityMain.this, "导入成功: " + chosen.getName(), Toast.LENGTH_SHORT).show();
+                    } catch (Exception e) {
+                        Log.e("MAIN", "LoadM3U error: " + e);
+                        Toast.makeText(ActivityMain.this, "导入失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+        });
+        builder.setNegativeButton(android.R.string.cancel, null);
+        builder.show();
+    }
     void LoadFavouritesSimple() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
