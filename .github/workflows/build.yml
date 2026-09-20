@@ -25,6 +25,19 @@ jobs:
       - name: Build Free Debug APK
         run: ./gradlew assembleFreeDebug --stacktrace
 
+      - name: Sign APK for Android 5 (v1 + v2)
+        run: |
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
+          echo "Using build tools from: $BUILD_TOOLS"
+          for apk in app/build/outputs/apk/free/debug/*.apk; do
+            echo "Signing $apk for Android 5..."
+            $BUILD_TOOLS/zipalign -f -p 4 "$apk" "${apk}.aligned" || cp "$apk" "${apk}.aligned"
+            $BUILD_TOOLS/apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey --v1-signing-enabled true --v2-signing-enabled true "${apk}.aligned"
+            $BUILD_TOOLS/apksigner verify --verbose "${apk}.aligned"
+            mv "${apk}.aligned" "$apk"
+          done
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
