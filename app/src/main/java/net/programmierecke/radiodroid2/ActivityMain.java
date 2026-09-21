@@ -162,13 +162,6 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
         setTheme(Utils.getThemeResId(this));
         setContentView(R.layout.layout_main);
 
-        Log.d(TAG, "FilesDir: "+getFilesDir().getAbsolutePath());
-        Log.d(TAG, "CacheDir: "+getCacheDir().getAbsolutePath());
-                }
-            }
-        } catch (Exception e) {
-        }
-
         final Toolbar myToolbar = findViewById(R.id.my_awesome_toolbar);
         setSupportActionBar(myToolbar);
 
