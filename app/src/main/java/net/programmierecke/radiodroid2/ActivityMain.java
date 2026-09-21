@@ -164,19 +164,6 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
 
         Log.d(TAG, "FilesDir: "+getFilesDir().getAbsolutePath());
         Log.d(TAG, "CacheDir: "+getCacheDir().getAbsolutePath());
-        try {
-            File dir = new File(getFilesDir().getAbsolutePath());
-            if (dir.isDirectory()) {
-
-                String[] children = dir.list();
-                for (String aChildren : children) {
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "delete file:" + aChildren);
-                    }
-                    try {
-                        new File(dir, aChildren).delete();
-                    } catch (Exception e) {
-                    }
                 }
             }
         } catch (Exception e) {
