@@ -339,8 +339,6 @@ public class M3uImporter {
                     st.CountryCode = "";
                     st.State = "";
                     st.Language = "";
-                    st.LanguageCodes = ""; // 补上
-                    st.Tags = "";
                     st.Codec = st.Hls ? "HLS" : "MP3";
                     st.Bitrate = 128;
                     st.Votes = 0;
