@@ -823,12 +823,10 @@ public class ActivityMain extends AppCompatActivity implements SearchView.OnQuer
                     // 点击文件夹：进入下一层目录
                     showInAppFilePicker(chosen);
                 } else {
-                    // 点击了具体的 M3U 文件：调用原本的 LoadM3U 导入并刷新界面
+                    // 点击了具体的 M3U 文件：直接调用 LoadM3U 存盘并自动刷新
                     try {
                         RadioDroidApp radioDroidApp = (RadioDroidApp) getApplication();
                         radioDroidApp.getFavouriteManager().LoadM3U(chosen.getParent(), chosen.getName());
-                        mFragmentManager.beginTransaction().replace(R.id.containerView, new FragmentStarred()).commitAllowingStateLoss();
-                        Toast.makeText(ActivityMain.this, "导入成功: " + chosen.getName(), Toast.LENGTH_SHORT).show();
                     } catch (Exception e) {
                         Log.e("MAIN", "LoadM3U error: " + e);
                         Toast.makeText(ActivityMain.this, "导入失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
