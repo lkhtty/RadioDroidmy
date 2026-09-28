@@ -213,6 +213,7 @@ public class FavouriteManager extends StationSaveManager {
                     st.StationUuid = UUID.randomUUID().toString();
                     st.Name = (name != null && !name.isEmpty()) ? name : "电台";
                     st.StreamUrl = url;
+                    st.playableUrl = url;
                     st.Hls = url.contains(".m3u8");
 
                     st.HomePageUrl = "";
@@ -220,12 +221,17 @@ public class FavouriteManager extends StationSaveManager {
                     st.Country = "";
                     st.CountryCode = "";
                     st.State = "";
+                    st.TagsAll = "";          // 变量名是 TagsAll！绝不能为 null，否则 DecodeJson 解码失败会直接丢弃电台
                     st.Language = "";
+                    st.ChangeUuid = "";
                     st.Codec = st.Hls ? "HLS" : "MP3";
                     st.Bitrate = 128;
                     st.Votes = 0;
                     st.ClickCount = 0;
                     st.ClickTrend = 0;
+                    st.Working = true;
+                    st.DeletedOnServer = false;
+                    st.queue = this;         // 绑定所属队列，防止空指针
 
                     newStations.add(st);
                     currentName = null;
@@ -246,13 +252,15 @@ public class FavouriteManager extends StationSaveManager {
         int addedCount = 0;
         for (DataRadioStation st : newStations) {
             if (!has(st.StationUuid)) {
+                st.queue = this;
                 listStations.add(st);
                 addedCount++;
             }
         }
 
-        // 仅在最后统一进行单次存盘！
+        // 仅在最后统一进行单次存盘，并通知观察者界面原地刷新！
         Save();
+        notifyObservers();
 
         Toast.makeText(context, "成功导入 " + addedCount + " 个电台", Toast.LENGTH_LONG).show();
     }
