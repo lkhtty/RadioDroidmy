@@ -104,6 +104,14 @@ public class PlayStationTask extends AsyncTask<Void, Void, String> {
     protected String doInBackground(Void... params) {
         Context ctx = contextWeakReference.get();
         if (ctx != null) {
+            // 【关卡1】：本地导入的 M3U 电台自带真实流地址，直接返回播放，绝不向海外服务器反查！
+            if (stationToPlay.StreamUrl != null && !stationToPlay.StreamUrl.trim().isEmpty()) {
+                return stationToPlay.StreamUrl.trim();
+            }
+            if (stationToPlay.playableUrl != null && !stationToPlay.playableUrl.trim().isEmpty()) {
+                return stationToPlay.playableUrl.trim();
+            }
+
             RadioDroidApp radioDroidApp = (RadioDroidApp) ctx.getApplicationContext();
 
             if (!stationToPlay.hasValidUuid()) {
@@ -116,12 +124,16 @@ public class PlayStationTask extends AsyncTask<Void, Void, String> {
                 return null;
             }
 
-            return Utils.getRealStationLink(radioDroidApp.getHttpClient(), ctx.getApplicationContext(), stationToPlay.StationUuid);
+            String realUrl = Utils.getRealStationLink(radioDroidApp.getHttpClient(), ctx.getApplicationContext(), stationToPlay.StationUuid);
+            if (realUrl != null && !realUrl.trim().isEmpty()) {
+                return realUrl.trim();
+            }
+
+            return stationToPlay.StreamUrl;
         } else {
             return null;
         }
     }
-
     @Override
     protected void onPostExecute(String result) {
         Context ctx = contextWeakReference.get();
