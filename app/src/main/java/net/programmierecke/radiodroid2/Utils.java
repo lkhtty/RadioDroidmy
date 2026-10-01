@@ -601,31 +601,42 @@ public class Utils {
     }
 
     public static OkHttpClient.Builder enableTls12OnPreLollipop(OkHttpClient.Builder client) {
-        if (Build.VERSION.SDK_INT >= 16 && Build.VERSION.SDK_INT < 22) {
-            try {
-                TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                trustManagerFactory.init((KeyStore)null);
-                TrustManager[] tmList = trustManagerFactory.getTrustManagers();
-                Log.i("OkHttpTLSCompat", "Found trustmanagers:"+tmList.length);
-                X509TrustManager tm = (X509TrustManager)tmList[0];
+        try {
+            // 针对 Android 5 及更老旧的车机系统，放宽证书校验，解决 2021 年 Let's Encrypt 根证书过期导致无法连接 HTTPS 流的问题
+            final X509TrustManager trustAllCert = new X509TrustManager() {
+                @Override
+                public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) {}
+                @Override
+                public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) {}
+                @Override
+                public java.security.cert.X509Certificate[] getAcceptedIssuers() {
+                    return new java.security.cert.X509Certificate[]{};
+                }
+            };
 
-                SSLContext sc = SSLContext.getInstance("TLSv1.2");
-                sc.init(null, null, null);
-                client.sslSocketFactory(new Tls12SocketFactory(sc.getSocketFactory()), tm);
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, new TrustManager[]{trustAllCert}, new java.security.SecureRandom());
 
-                ConnectionSpec cs = new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
-                        .tlsVersions(TlsVersion.TLS_1_2)
-                        .build();
-
-                List<ConnectionSpec> specs = new ArrayList<>();
-                specs.add(cs);
-                specs.add(ConnectionSpec.COMPATIBLE_TLS);
-                specs.add(ConnectionSpec.CLEARTEXT);
-
-                client.connectionSpecs(specs);
-            } catch (Exception exc) {
-                Log.e("OkHttpTLSCompat", "Error while setting TLS 1.2", exc);
+            if (Build.VERSION.SDK_INT >= 16 && Build.VERSION.SDK_INT <= 22) {
+                client.sslSocketFactory(new Tls12SocketFactory(sc.getSocketFactory()), trustAllCert);
+            } else {
+                client.sslSocketFactory(sc.getSocketFactory(), trustAllCert);
             }
+
+            client.hostnameVerifier((hostname, session) -> true);
+
+            ConnectionSpec cs = new ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
+                    .tlsVersions(TlsVersion.TLS_1_2, TlsVersion.TLS_1_1, TlsVersion.TLS_1_0)
+                    .build();
+
+            List<ConnectionSpec> specs = new ArrayList<>();
+            specs.add(cs);
+            specs.add(ConnectionSpec.COMPATIBLE_TLS);
+            specs.add(ConnectionSpec.CLEARTEXT);
+
+            client.connectionSpecs(specs);
+        } catch (Exception exc) {
+            Log.e("OkHttpTLSCompat", "Error while setting TLS 1.2 / TrustAll", exc);
         }
 
         return client;
