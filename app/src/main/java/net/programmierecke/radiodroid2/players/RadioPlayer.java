@@ -122,7 +122,12 @@ public class RadioPlayer implements PlayerWrapper.PlayListener, Recordable {
         setState(PlayState.PrePlaying, -1);
 
         playStationTask = new PlayStationTask(station, mainContext,
-                (url) -> RadioPlayer.this.play(station.playableUrl, station.Name, isAlarm),
+                (url) -> {
+                    // 确保优先使用解析出来的有效流地址，其次使用本地 StreamUrl，绝不传空
+                    String finalPlayUrl = (url != null && !url.trim().isEmpty()) ? url : station.StreamUrl;
+                    station.playableUrl = finalPlayUrl;
+                    RadioPlayer.this.play(finalPlayUrl, station.Name, isAlarm);
+                },
                 (executionResult) -> {
                     RadioPlayer.this.playStationTask = null;
 
